@@ -2,7 +2,10 @@ import Foundation
 import Combine
 import Network
 import NearbyInteraction
+import OSLog
 import UIKit
+
+private let log = Logger(subsystem: "dev.autumn.bumpdemo", category: "bump")
 
 struct BumpMeeting: Equatable {
     let id: String
@@ -305,10 +308,22 @@ final class BumpCoordinator: NSObject, ObservableObject, NISessionDelegate {
             self.distance = measured
             guard !self.bumped else { return }
             self.closeReadings = measured < 0.25 ? self.closeReadings + 1 : 0
+            log.info("distance \(measured, format: .fixed(precision: 3)) close \(self.closeReadings)")
             if self.closeReadings >= 2 {
                 self.showBump()
                 self.send(Message(kind: "bump", token: nil))
             }
+        }
+    }
+
+    func session(_ session: NISession, didRemove nearbyObjects: [NINearbyObject], reason: NINearbyObject.RemovalReason) {
+        DispatchQueue.main.async {
+            guard self.niSession === session else { return }
+            log.info("peer removed \(reason == .timeout ? "timeout" : "peerEnded")")
+            self.distance = nil
+            self.closeReadings = 0
+            guard reason == .timeout, let config = session.configuration else { return }
+            session.run(config)
         }
     }
 
