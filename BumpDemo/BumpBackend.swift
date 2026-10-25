@@ -122,6 +122,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     private var credentials: DeviceCredentials?
     private var authSession: ASWebAuthenticationSession?
     private var meetingTask: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
     private let session = URLSession.shared
 
     private var baseURL: URL? {
@@ -129,8 +130,17 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
         return URL(string: configured)
     }
 
+    /// Overlapping calls share one run, so a fresh install never registers twice.
     func start() async {
-        defer { loaded = true }
+        if let startTask { return await startTask.value }
+        let task = Task { await performStart() }
+        startTask = task
+        await task.value
+        startTask = nil
+        loaded = true
+    }
+
+    private func performStart() async {
         do {
             if credentials != nil {
                 try await refreshMe()

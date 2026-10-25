@@ -22,19 +22,34 @@ private struct RootView: View {
     @State private var showingOverlap = false
     @State private var clinkID = UUID()
     @State private var demo: DemoClink?
+    @State private var splashExpired = false
+    /// Stays open until this person taps Clink again, even if the other phone resets first.
+    @State private var clinkOpen = false
+    /// The last result, kept so a reset from the other phone doesn't empty the screen.
+    @State private var kept: [OverlapSection]?
 
     /// Backend messages that describe normal progress rather than a problem.
     private static func isRoutine(_ status: String) -> Bool {
         ["Connecting to server", "Opening ", "Connect an account", "Connected: "].contains(where: status.hasPrefix)
     }
+    /// Backend messages about a clink in progress.
+    private static func isMeetingStatus(_ status: String) -> Bool {
+        ["Comparing", "Found ", "No overlap", "Waiting for", "Connect the same", "Still waiting"].contains(where: status.hasPrefix)
+    }
     /// Coordinator messages worth showing on the home screen.
     private static let problemMarkers = ["Could not", "stopped", "does not support", "Check Local Network"]
 
-    private var clinking: Bool { coordinator.bumped || demo != nil }
+    private var clinking: Bool { clinkOpen || demo != nil }
     /// Networks to offer; Instagram alone until the server says otherwise.
     private var networks: [Network] { backend.available.isEmpty ? [.instagram] : backend.available }
+    private var liveSections: [OverlapSection] { backend.overlaps.map { OverlapSection(network: $0.0, overlap: $0.1) } }
     private var sections: [OverlapSection] {
-        demo?.sections ?? backend.overlaps.map { OverlapSection(network: $0.0, overlap: $0.1) }
+        demo?.sections ?? (backend.comparisonReady ? liveSections : kept ?? [])
+    }
+    private var homeProblem: String? {
+        if Self.problemMarkers.contains(where: coordinator.status.contains) { return coordinator.status }
+        let status = backend.status
+        return Self.isRoutine(status) || Self.isMeetingStatus(status) ? nil : status
     }
 
     #if DEBUG
@@ -51,7 +66,7 @@ private struct RootView: View {
 
     var body: some View {
         ZStack {
-            if !backend.loaded {
+            if !backend.loaded && !splashExpired {
                 LiveBackground(style: .cream)
                     .overlay(Wordmark(size: 30))
             } else if backend.connected.isEmpty && !Self.skipOnboarding && !Self.autoDemo {
@@ -66,7 +81,7 @@ private struct RootView: View {
                 HomeView(
                     distance: coordinator.distance,
                     paired: coordinator.distance != nil,
-                    problem: Self.problemMarkers.contains(where: coordinator.status.contains) ? coordinator.status : nil,
+                    problem: homeProblem,
                     networks: networks,
                     connected: backend.connected,
                     linking: backend.linking,
@@ -80,8 +95,8 @@ private struct RootView: View {
             if clinking {
                 ClinkView(
                     sections: sections,
-                    ready: demo?.ready ?? backend.comparisonReady,
-                    message: demo == nil ? backend.status : nil,
+                    ready: demo?.ready ?? (backend.comparisonReady || kept != nil),
+                    message: demo == nil && !Self.isRoutine(backend.status) ? backend.status : nil,
                     onSeeAll: { showingOverlap = true },
                     onClinkAgain: clinkAgain
                 )
@@ -89,7 +104,7 @@ private struct RootView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: backend.loaded)
+        .animation(.easeInOut(duration: 0.35), value: backend.loaded || splashExpired)
         .animation(.easeInOut(duration: 0.35), value: backend.connected.isEmpty)
         .animation(.easeInOut(duration: 0.25), value: clinking)
         .sheet(isPresented: $showingOverlap) {
@@ -99,6 +114,8 @@ private struct RootView: View {
             )
         }
         .task {
+            // Don't hold the splash for a slow server; the screen updates when it answers.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { splashExpired = true }
             coordinator.start()
             await backend.start()
             if let participantID = backend.participantID { coordinator.setParticipantID(participantID) }
@@ -109,7 +126,21 @@ private struct RootView: View {
             }
         }
         .onChange(of: coordinator.bumped) { bumped in
-            if bumped { clinkID = UUID() }
+            if bumped {
+                clinkID = UUID()
+                kept = nil
+                clinkOpen = true
+            } else if kept == nil {
+                // The other phone reset before we had a result, so there is nothing to show.
+                clinkOpen = false
+                showingOverlap = false
+            }
+        }
+        .onChange(of: backend.status) { _ in
+            if clinkOpen, backend.comparisonReady { kept = liveSections }
+        }
+        .onChange(of: backend.comparisonReady) { ready in
+            if clinkOpen, ready { kept = liveSections }
         }
         .onChange(of: backend.participantID) { participantID in
             if let participantID { coordinator.setParticipantID(participantID) }
@@ -136,7 +167,10 @@ private struct RootView: View {
 
     private func clinkAgain() {
         showingOverlap = false
-        if demo != nil { demo = nil } else { coordinator.reset() }
+        if demo != nil { demo = nil; return }
+        clinkOpen = false
+        kept = nil
+        coordinator.reset()
     }
 
     private var demoAction: (() -> Void)? {

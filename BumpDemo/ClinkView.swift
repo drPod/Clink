@@ -141,6 +141,15 @@ struct ClinkView: View {
                     .padding(.horizontal, 32)
                     .position(x: cx, y: cy + size / 2 + 56)
                     .transition(.opacity)
+
+                // A way out if the other phone never answers.
+                Button("Cancel", action: onClinkAgain)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.clinkCream.opacity(0.75))
+                    .frame(minWidth: 88, minHeight: 44)
+                    .opacity(Ease.segment(t, 4, 4.5))
+                    .allowsHitTesting(t > 4)
+                    .position(x: cx, y: h - 80)
             }
 
             let footer = Ease.inOut(Ease.segment(t, riseStart + 0.85, riseStart + 1.35))
