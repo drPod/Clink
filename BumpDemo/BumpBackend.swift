@@ -11,7 +11,29 @@ private struct DeviceCredentials: Codable {
 
 private struct MeResponse: Decodable {
     let participantId: String
-    let instagramConnected: Bool
+    let available: [String]
+    let connected: [String: String?]
+}
+
+enum Network: String, CaseIterable, Identifiable {
+    case instagram, linkedin, x
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .instagram: "Instagram"
+        case .linkedin: "LinkedIn"
+        case .x: "X"
+        }
+    }
+
+    var overlapPhrase: String {
+        switch self {
+        case .instagram, .x: "you both follow"
+        case .linkedin: "mutual connections"
+        }
+    }
 }
 
 private struct LinkResponse: Decodable {
@@ -25,12 +47,16 @@ struct SharedAccount: Decodable, Identifiable {
     let profileUrl: URL?
 }
 
-private struct MeetingResponse: Decodable {
-    let status: String
+struct NetworkOverlap: Decodable {
     let count: Int?
     let common: [SharedAccount]?
-    let asOf: Int?
     let stale: Bool?
+    let error: String?
+}
+
+private struct MeetingResponse: Decodable {
+    let status: String
+    let networks: [String: NetworkOverlap]?
 }
 
 private struct APIProblem: Decodable {
@@ -80,11 +106,11 @@ private enum DeviceKeychain {
 @MainActor
 final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
     @Published private(set) var participantID: String?
-    @Published private(set) var instagramConnected = false
+    @Published private(set) var available: [Network] = []
+    @Published private(set) var connected: [Network: String] = [:]
     @Published private(set) var status = "Connecting to server…"
-    @Published private(set) var sharedAccounts: [SharedAccount] = []
-    @Published private(set) var resultIsStale = false
-    @Published private(set) var linking = false
+    @Published private(set) var overlaps: [(Network, NetworkOverlap)] = []
+    @Published private(set) var linking: Network?
 
     private var credentials: DeviceCredentials?
     private var authSession: ASWebAuthenticationSession?
@@ -111,36 +137,36 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 try DeviceKeychain.save(created)
                 credentials = created
                 participantID = created.participantId
-                status = "Ready to connect Instagram."
+                try await refreshMe()
             }
         } catch {
             status = error.localizedDescription
         }
     }
 
-    func connectInstagram() {
-        guard credentials != nil, !linking else { return }
-        linking = true
-        status = "Opening Instagram connection…"
+    func connect(_ network: Network) {
+        guard credentials != nil, linking == nil else { return }
+        linking = network
+        status = "Opening \(network.label) connection…"
         Task {
             do {
-                let response: LinkResponse = try await request("/v1/instagram/link", method: "POST")
+                let response: LinkResponse = try await request("/v1/\(network.rawValue)/link", method: "POST")
                 let auth = ASWebAuthenticationSession(url: response.url, callbackURLScheme: "bumpdemo") {
                     [weak self] callbackURL, error in
                     Task { @MainActor in
                         guard let self else { return }
                         self.authSession = nil
-                        self.linking = false
+                        self.linking = nil
                         let callback = callbackURL.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
                         let approved = callback?.queryItems?.contains(where: { $0.name == "ok" && $0.value == "1" }) == true
                         if approved {
                             do { try await self.refreshMe() }
                             catch { self.status = error.localizedDescription }
                         } else if error == nil {
-                            self.status = "Instagram connection did not finish."
+                            self.status = "\(network.label) connection did not finish."
                         } else {
                             do { try await self.refreshMe() }
-                            catch { self.status = "Instagram connection was canceled." }
+                            catch { self.status = "\(network.label) connection was canceled." }
                         }
                     }
                 }
@@ -148,11 +174,11 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 authSession = auth
                 if !auth.start() {
                     authSession = nil
-                    linking = false
-                    status = "Could not open Instagram sign-in."
+                    linking = nil
+                    status = "Could not open \(network.label) sign-in."
                 }
             } catch {
-                linking = false
+                linking = nil
                 status = error.localizedDescription
             }
         }
@@ -170,8 +196,8 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
 
     func joinMeeting(_ meeting: BumpMeeting) {
         meetingTask?.cancel()
-        sharedAccounts = []
-        status = "Checking what you both follow…"
+        overlaps = []
+        status = "Comparing your accounts…"
         meetingTask = Task {
             do {
                 let body = try JSONEncoder().encode(["peer_id": meeting.peerID])
@@ -180,15 +206,16 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 )
                 for _ in 0..<40 {
                     try Task.checkCancellation()
-                    if response.status == "ready" {
-                        sharedAccounts = response.common ?? []
-                        resultIsStale = response.stale ?? false
-                        status = sharedAccounts.isEmpty ? "No shared accounts found." : "You both follow \(sharedAccounts.count) accounts."
-                        return
+                    if response.status == "ready", let networks = response.networks {
+                        overlaps = Network.allCases.compactMap { network in networks[network.rawValue].map { (network, $0) } }
+                        let total = overlaps.reduce(0) { $0 + ($1.1.count ?? 0) }
+                        status = total == 0 ? "No overlap found yet." : "Found \(total) people in common."
+                        if overlaps.allSatisfy({ $0.1.error == nil }) { return }
+                    } else {
+                        status = response.status == "waiting_for_accounts"
+                            ? "Connect the same network on both phones to compare."
+                            : "Waiting for the other phone…"
                     }
-                    status = response.status == "waiting_for_instagram"
-                        ? "Connect Instagram on both phones to see your overlap."
-                        : "Waiting for the other phone…"
                     try await Task.sleep(nanoseconds: 3_000_000_000)
                     response = try await request("/v1/meetings/\(meeting.id)")
                 }
@@ -204,16 +231,23 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     func clearMeeting() {
         meetingTask?.cancel()
         meetingTask = nil
-        sharedAccounts = []
-        resultIsStale = false
-        status = instagramConnected ? "Instagram connected." : "Ready to connect Instagram."
+        overlaps = []
+        status = connectedSummary
+    }
+
+    private var connectedSummary: String {
+        let names = Network.allCases.filter { connected[$0] != nil }.map(\.label)
+        return names.isEmpty ? "Connect an account to compare." : "Connected: \(names.joined(separator: ", "))."
     }
 
     private func refreshMe() async throws {
         let me: MeResponse = try await request("/v1/me")
         participantID = me.participantId
-        instagramConnected = me.instagramConnected
-        status = me.instagramConnected ? "Instagram connected." : "Ready to connect Instagram."
+        available = me.available.compactMap(Network.init(rawValue:))
+        connected = Dictionary(uniqueKeysWithValues: me.connected.compactMap { key, value in
+            Network(rawValue: key).map { ($0, value ?? "") }
+        })
+        status = connectedSummary
     }
 
     private func request<T: Decodable>(
@@ -238,7 +272,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
             let detail = (try? JSONDecoder().decode(APIProblem.self, from: data))?.detail ?? "Server error"
             if response.statusCode == 429 {
                 let retry = response.value(forHTTPHeaderField: "Retry-After")
-                throw APIError(message: "Instagram is rate limited. Try again in \(retry ?? "a few") seconds.")
+                throw APIError(message: "\(detail). Try again in \(retry ?? "a few") seconds.")
             }
             throw APIError(message: detail)
         }

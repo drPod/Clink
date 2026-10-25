@@ -40,15 +40,24 @@ private struct BumpView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.75))
 
-                if backend.instagramConnected {
-                    Label("Instagram connected", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else if backend.participantID != nil {
-                    Button(backend.linking ? "Connecting…" : "Connect Instagram") {
-                        backend.connectInstagram()
+                if backend.participantID != nil {
+                    VStack(spacing: 10) {
+                        ForEach(backend.available) { network in
+                            if let username = backend.connected[network] {
+                                Label(
+                                    username.isEmpty ? "\(network.label) connected" : "\(network.label) · @\(username)",
+                                    systemImage: "checkmark.circle.fill"
+                                )
+                                .foregroundStyle(.green)
+                            } else {
+                                Button(backend.linking == network ? "Connecting…" : "Connect \(network.label)") {
+                                    backend.connect(network)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(backend.linking != nil)
+                            }
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(backend.linking)
                 } else {
                     Button("Retry server") { Task { await backend.start() } }
                         .buttonStyle(.bordered)
@@ -59,27 +68,35 @@ private struct BumpView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.72))
 
-                if !backend.sharedAccounts.isEmpty {
+                if !backend.overlaps.isEmpty {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(backend.sharedAccounts) { account in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(account.name).font(.headline)
-                                    if let username = account.username {
-                                        Text("@\(username)").font(.subheadline).foregroundStyle(.white.opacity(0.65))
+                        VStack(alignment: .leading, spacing: 16) {
+                            ForEach(backend.overlaps, id: \.0) { network, overlap in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("\(network.label) · \(overlap.count ?? 0) \(network.overlapPhrase)")
+                                        .font(.headline)
+                                    if let error = overlap.error {
+                                        Text(error).font(.subheadline).foregroundStyle(.orange)
+                                    }
+                                    ForEach(overlap.common ?? []) { account in
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(account.name)
+                                            if let username = account.username {
+                                                Text("@\(username)").font(.subheadline).foregroundStyle(.white.opacity(0.65))
+                                            }
+                                        }
+                                    }
+                                    if overlap.stale == true {
+                                        Text("Showing a cached \(network.label) list")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.65))
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     }
-                    .frame(maxHeight: 200)
-                }
-
-                if backend.resultIsStale {
-                    Text("Showing a cached Instagram list")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
+                    .frame(maxHeight: 260)
                 }
 
                 if let distance = coordinator.distance, !coordinator.bumped {
@@ -121,8 +138,8 @@ private struct BumpView: View {
             if let meeting { backend.joinMeeting(meeting) }
             else { backend.clearMeeting() }
         }
-        .onChange(of: backend.instagramConnected) { connected in
-            if connected, let meeting = coordinator.meeting { backend.joinMeeting(meeting) }
+        .onChange(of: backend.connected) { _ in
+            if let meeting = coordinator.meeting { backend.joinMeeting(meeting) }
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active {

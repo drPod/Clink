@@ -18,10 +18,6 @@ class Store:
                     id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL,
                     instagram_account_id TEXT, instagram_user_id TEXT
                 );
-                CREATE TABLE IF NOT EXISTS link_states (
-                    state_hash TEXT PRIMARY KEY, participant_id TEXT NOT NULL,
-                    expires_at INTEGER NOT NULL
-                );
                 CREATE TABLE IF NOT EXISTS meeting_joins (
                     meeting_id TEXT NOT NULL, participant_id TEXT NOT NULL,
                     peer_id TEXT NOT NULL, joined_at INTEGER NOT NULL,
@@ -36,6 +32,18 @@ class Store:
                 CREATE TABLE IF NOT EXISTS account_cooldowns (
                     account_id TEXT PRIMARY KEY, until_at INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS auth_states (
+                    state_hash TEXT PRIMARY KEY, participant_id TEXT NOT NULL, network TEXT NOT NULL,
+                    verifier TEXT, expires_at INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS linked_accounts (
+                    participant_id TEXT NOT NULL, network TEXT NOT NULL,
+                    account_id TEXT NOT NULL, user_id TEXT, username TEXT,
+                    PRIMARY KEY (participant_id, network), UNIQUE (network, account_id)
+                );
+                INSERT OR IGNORE INTO linked_accounts (participant_id, network, account_id, user_id)
+                    SELECT id, 'instagram', instagram_account_id, instagram_user_id
+                    FROM participants WHERE instagram_account_id IS NOT NULL;
                 """
             )
 
@@ -64,32 +72,41 @@ class Store:
         with self.connect() as db:
             return db.execute("SELECT * FROM participants WHERE id = ?", (participant_id,)).fetchone()
 
-    def create_state(self, participant_id: str, expires_at: int) -> str:
+    def create_state(self, participant_id: str, network: str, expires_at: int, verifier: str | None = None) -> str:
         state = secrets.token_urlsafe(32)
         with self.connect() as db:
             db.execute(
-                "INSERT INTO link_states (state_hash, participant_id, expires_at) VALUES (?, ?, ?)",
-                (self.digest(state), participant_id, expires_at),
+                "INSERT INTO auth_states (state_hash, participant_id, network, verifier, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (self.digest(state), participant_id, network, verifier, expires_at),
             )
         return state
 
-    def consume_state(self, state: str) -> str | None:
+    def consume_state(self, state: str, network: str) -> sqlite3.Row | None:
         with self.connect() as db:
-            row = db.execute("SELECT * FROM link_states WHERE state_hash = ?", (self.digest(state),)).fetchone()
-            db.execute("DELETE FROM link_states WHERE state_hash = ?", (self.digest(state),))
-        return row["participant_id"] if row and row["expires_at"] >= time.time() else None
+            row = db.execute("SELECT * FROM auth_states WHERE state_hash = ?", (self.digest(state),)).fetchone()
+            db.execute("DELETE FROM auth_states WHERE state_hash = ?", (self.digest(state),))
+        return row if row and row["network"] == network and row["expires_at"] >= time.time() else None
 
-    def link_account(self, participant_id: str, account_id: str, instagram_user_id: str) -> None:
+    def link_account(
+        self, participant_id: str, network: str, account_id: str, user_id: str | None, username: str | None = None
+    ) -> None:
         with self.connect() as db:
             existing = db.execute(
-                "SELECT id FROM participants WHERE instagram_account_id = ? AND id != ?", (account_id, participant_id)
+                "SELECT participant_id FROM linked_accounts WHERE network = ? AND account_id = ? AND participant_id != ?",
+                (network, account_id, participant_id),
             ).fetchone()
             if existing:
-                raise ValueError("Instagram account is already linked to another phone")
+                raise ValueError(f"{network} account is already linked to another phone")
             db.execute(
-                "UPDATE participants SET instagram_account_id = ?, instagram_user_id = ? WHERE id = ?",
-                (account_id, instagram_user_id, participant_id),
+                """INSERT OR REPLACE INTO linked_accounts (participant_id, network, account_id, user_id, username)
+                VALUES (?, ?, ?, ?, ?)""",
+                (participant_id, network, account_id, user_id, username),
             )
+
+    def linked_accounts(self, participant_id: str) -> dict[str, sqlite3.Row]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM linked_accounts WHERE participant_id = ?", (participant_id,)).fetchall()
+        return {row["network"]: row for row in rows}
 
     def join(self, meeting_id: str, participant_id: str, peer_id: str) -> None:
         with self.connect() as db:

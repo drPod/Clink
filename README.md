@@ -2,8 +2,14 @@
 
 Two iPhones running the app discover one another, exchange Nearby Interaction
 tokens, and turn green with a haptic response when they come within about 25 cm.
-Each phone can connect Instagram through Unipile Hosted Auth. Once both are
-connected and meet, the server compares the accounts they both follow.
+Each phone can connect Instagram, LinkedIn and X. When two phones meet, the
+server compares every network both phones have connected:
+
+| Network | Sign-in | Compared list |
+|---|---|---|
+| Instagram | Unipile Hosted Auth | accounts both people follow |
+| LinkedIn | Unipile Hosted Auth | mutual connections |
+| X | X OAuth 2.0 with PKCE (proves the account) | accounts both people follow, from twitterapi.io |
 
 ## Run on two iPhones
 
@@ -17,7 +23,7 @@ connected and meet, the server compares the accounts they both follow.
    if Xcode says it is taken.
 4. Select the first phone as the run destination and press Run. Repeat for the
    second phone. Allow Local Network and Nearby Interaction permissions on both.
-5. Connect Instagram on both phones, then bring the phones close. Both should
+5. Connect the same network on both phones, then bring the phones close. Both should
    turn green and vibrate, followed by the common following list. Tap **Try
    again** to repeat. If discovery stops, tap **Restart pairing** on both.
 
@@ -31,7 +37,19 @@ Xcode 26.6 on the first Mac reports a missing device image variant for it.
 run `xcodegen generate` from this directory.
 
 The API lives in `server/`. It requires an application-scoped Unipile v2 API key
-in `UNIPILE_V2_API_KEY` on the server. Its signing and data stay on the server;
+in `UNIPILE_V2_API_KEY` on the server for Instagram and LinkedIn.
+
+X is enabled when the server also has `X_CLIENT_ID` and `TWITTERAPI_IO_KEY`
+(plus `X_CLIENT_SECRET` for a confidential X app). In the X developer console,
+enable OAuth 2.0 user authentication for the app and register
+`https://bump.40-160-146-47.sslip.io/v1/x/callback` as the callback URL. The
+server requests only `users.read tweet.read`, uses the token once to read the
+signed-in username, and does not store it.
+
+Instagram sign-in in Unipile's web page can fail with "Captcha verification
+failed". Use the page's UniLogin option from a desktop Chrome profile that is
+signed in to Instagram; the phone picks up the account when the app returns to
+the foreground. Its signing and data stay on the server;
 the iOS app keeps only its own anonymous device token in Keychain. The server
 stores complete following lists for one hour and honors Unipile rate limits.
 

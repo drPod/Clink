@@ -5,13 +5,14 @@ from unipile.models.create_auth_link_request import CreateAuthLinkRequest
 
 PAGE_LIMIT = 20
 MAX_PAGES = 100
+NETWORKS = ("instagram", "linkedin")
 
 
 class UnipileDataError(RuntimeError):
     pass
 
 
-class InstagramClient:
+class UnipileClient:
     def __init__(self, api_key: str, *, base_url: str = "https://api.unipile.com") -> None:
         config = unipile.Configuration()
         config.api_key["apiKey"] = api_key
@@ -22,32 +23,36 @@ class InstagramClient:
         self.accounts = unipile.AccountsApi(self.api_client)
         self.users = unipile.UsersApi(self.api_client)
 
-    def create_link(self, *, callback: str, state: str, expires_on: datetime) -> str:
+    def create_link(self, network: str, *, callback: str, state: str, expires_on: datetime) -> str:
         payload = CreateAuthLinkRequest.from_dict(
-            {"providers": "instagram", "redirect_uri": callback, "expires_on": expires_on.isoformat(), "state": state}
+            {"providers": network, "redirect_uri": callback, "expires_on": expires_on.isoformat(), "state": state}
         )
         return self.auth.create_auth_link(payload, _request_timeout=30).link
 
-    def verify_account(self, account_id: str) -> tuple[str, str]:
+    def verify_account(self, network: str, account_id: str) -> tuple[str, str]:
         account = self.accounts.get_account(account_id, _request_timeout=30)
-        if account.id != account_id or account.provider != "instagram" or account.status != "running":
-            raise UnipileDataError("Instagram account is not ready")
+        if account.id != account_id or account.provider != network or account.status != "running":
+            raise UnipileDataError(f"{network} account is not ready")
         return account.id, account.user_id
 
-    def following(self, account_id: str) -> list[dict[str, str | None]]:
+    def people(self, network: str, account_id: str) -> list[dict[str, str | None]]:
+        if network == "linkedin":
+            return self._collect(lambda **kwargs: self.users.get_user_relations("me", account_id, **kwargs), True)
+        return self._collect(lambda **kwargs: self.users.list_user_following("me", account_id, **kwargs), False)
+
+    def _collect(self, fetch, relations: bool) -> list[dict[str, str | None]]:
         users: dict[str, dict[str, str | None]] = {}
         seen_cursors: set[str] = set()
         cursor: str | None = None
         offset = 0
         for _ in range(MAX_PAGES):
             kwargs = {"cursor": cursor} if cursor else {"offset": offset, "limit": PAGE_LIMIT}
-            page = self.users.list_user_following(
-                "me", account_id, _request_timeout=30, _headers={"Cache-Control": "max-age=3600"}, **kwargs
-            )
+            page = fetch(_request_timeout=30, _headers={"Cache-Control": "max-age=3600"}, **kwargs)
             before = len(users)
-            for user in page.data:
+            for entry in page.data:
+                user = entry.user if relations else entry
                 if not user.id:
-                    raise UnipileDataError("Following entry has no provider ID")
+                    raise UnipileDataError("List entry has no provider ID")
                 users[user.id] = {
                     "id": user.id,
                     "name": user.display_name,
@@ -65,4 +70,4 @@ class InstagramClient:
             if len(users) == before:
                 raise UnipileDataError("Unipile repeated a page without progress")
             offset += PAGE_LIMIT
-        raise UnipileDataError("Following list exceeded the demo's 100-page limit")
+        raise UnipileDataError("List exceeded the demo's 100-page limit")
