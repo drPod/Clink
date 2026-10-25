@@ -65,25 +65,32 @@ class XClient:
     def following(self, username: str) -> list[dict[str, str | None]]:
         users: dict[str, dict[str, str | None]] = {}
         cursor = ""
+        seen_cursors: set[str] = set()
         for _ in range(MAX_PAGES):
             query = {"userName": username, "pageSize": 200} | ({"cursor": cursor} if cursor else {})
             page = self._json("GET", f"{FOLLOWINGS_URL}?{urlencode(query)}", headers={"X-API-Key": self.graph_key})
             if page.get("status") == "error":
                 raise XError("X following list request failed")
-            for user in page.get("followings") or []:
+            entries = page.get("followings")
+            if not isinstance(entries, list):
+                raise XError("X following list returned an invalid page")
+            for user in entries:
                 handle = user.get("userName") or user.get("screen_name")
                 user_id = str(user.get("id") or "") or (handle or "").lower()
                 if not user_id:
                     raise XError("Following entry has no X ID")
                 users[user_id] = {
                     "id": user_id,
-                    "name": user.get("name") or handle,
+                    "name": user.get("name") or handle or user_id,
                     "username": handle,
                     "profile_url": f"https://x.com/{handle}" if handle else None,
                 }
-            cursor = page.get("next_cursor") or ""
-            if not page.get("has_next_page") or not cursor:
+            if page.get("has_next_page") is False:
                 return list(users.values())
+            cursor = page.get("next_cursor") or ""
+            if not cursor or cursor in seen_cursors:
+                raise XError("X following list pagination stopped before completion")
+            seen_cursors.add(cursor)
         raise XError("Following list exceeded the demo's page limit")
 
     def _json(self, method: str, url: str, *, headers: dict[str, str], body: str | None = None) -> dict:

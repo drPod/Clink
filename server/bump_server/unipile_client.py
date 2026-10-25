@@ -55,7 +55,7 @@ class UnipileClient:
                     raise UnipileDataError("List entry has no provider ID")
                 users[user.id] = {
                     "id": user.id,
-                    "name": user.display_name,
+                    "name": user.display_name or user.public_identifier or user.id,
                     "username": user.public_identifier,
                     "profile_url": user.profile_url,
                 }
