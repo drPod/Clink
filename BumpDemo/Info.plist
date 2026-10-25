@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Bump Demo</string>
+	<string>Clink</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -38,9 +38,9 @@
 		<string>_bumpdemo._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Find the other phone running Bump Demo.</string>
+	<string>Find nearby phones running Clink.</string>
 	<key>NSNearbyInteractionUsageDescription</key>
-	<string>Detect when the two phones are brought together.</string>
+	<string>Feel the clink when your phone touches someone else’s.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

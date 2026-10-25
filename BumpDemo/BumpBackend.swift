@@ -111,6 +111,13 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     @Published private(set) var status = "Connecting to server…"
     @Published private(set) var overlaps: [(Network, NetworkOverlap)] = []
     @Published private(set) var linking: Network?
+    /// True once startup has finished, whether or not it reached the server.
+    @Published private(set) var loaded = false
+    /// True once the server has compared both phones' accounts.
+    @Published private(set) var comparisonReady = false
+
+    /// Every account in common, across networks.
+    var sharedAccounts: [SharedAccount] { overlaps.flatMap { $0.1.common ?? [] } }
 
     private var credentials: DeviceCredentials?
     private var authSession: ASWebAuthenticationSession?
@@ -123,6 +130,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     }
 
     func start() async {
+        defer { loaded = true }
         do {
             if credentials != nil {
                 try await refreshMe()
@@ -197,6 +205,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     func joinMeeting(_ meeting: BumpMeeting) {
         meetingTask?.cancel()
         overlaps = []
+        comparisonReady = false
         status = "Comparing your accounts…"
         meetingTask = Task {
             do {
@@ -208,6 +217,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
                     try Task.checkCancellation()
                     if response.status == "ready", let networks = response.networks {
                         overlaps = Network.allCases.compactMap { network in networks[network.rawValue].map { (network, $0) } }
+                        comparisonReady = true
                         let total = overlaps.reduce(0) { $0 + ($1.1.count ?? 0) }
                         status = total == 0 ? "No overlap found yet." : "Found \(total) people in common."
                         if overlaps.allSatisfy({ $0.1.error == nil }) { return }
@@ -232,6 +242,7 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
         meetingTask?.cancel()
         meetingTask = nil
         overlaps = []
+        comparisonReady = false
         status = connectedSummary
     }
 

@@ -7,129 +7,109 @@ struct BumpDemoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            BumpView()
+            RootView()
                 .environmentObject(coordinator)
                 .environmentObject(backend)
         }
     }
 }
 
-private struct BumpView: View {
+private struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var coordinator: BumpCoordinator
     @EnvironmentObject private var backend: BumpBackend
 
+    @State private var showingOverlap = false
+    @State private var clinkID = UUID()
+    @State private var demo: DemoClink?
+
+    /// Backend messages that describe normal progress rather than a problem.
+    private static func isRoutine(_ status: String) -> Bool {
+        ["Connecting to server", "Opening ", "Connect an account", "Connected: "].contains(where: status.hasPrefix)
+    }
+    /// Coordinator messages worth showing on the home screen.
+    private static let problemMarkers = ["Could not", "stopped", "does not support", "Check Local Network"]
+
+    private var clinking: Bool { coordinator.bumped || demo != nil }
+    /// Networks to offer; Instagram alone until the server says otherwise.
+    private var networks: [Network] { backend.available.isEmpty ? [.instagram] : backend.available }
+    private var sections: [OverlapSection] {
+        demo?.sections ?? backend.overlaps.map { OverlapSection(network: $0.0, overlap: $0.1) }
+    }
+
+    #if DEBUG
+    /// Launch with -skipOnboarding to see the home screen, -demoClink to also play a clink,
+    /// or -demoOverlap to open the overlap sheet after it.
+    private static let skipOnboarding = ProcessInfo.processInfo.arguments.contains("-skipOnboarding")
+    private static let autoOverlap = ProcessInfo.processInfo.arguments.contains("-demoOverlap")
+    private static let autoDemo = autoOverlap || ProcessInfo.processInfo.arguments.contains("-demoClink")
+    #else
+    private static let skipOnboarding = false
+    private static let autoOverlap = false
+    private static let autoDemo = false
+    #endif
+
     var body: some View {
         ZStack {
-            (coordinator.bumped ? Color(red: 0.19, green: 0.76, blue: 0.57) : Color(red: 0.09, green: 0.10, blue: 0.16))
-                .ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                Spacer()
-
-                Image(systemName: coordinator.bumped ? "sparkles" : "iphone.radiowaves.left.and.right")
-                    .font(.system(size: 76, weight: .light))
-                    .symbolRenderingMode(.hierarchical)
-
-                Text(coordinator.bumped ? "Connected!" : "Bring phones together")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-
-                Text(coordinator.status)
-                    .font(.system(size: 17))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.75))
-
-                if backend.participantID != nil {
-                    VStack(spacing: 10) {
-                        ForEach(backend.available) { network in
-                            if let username = backend.connected[network] {
-                                Label(
-                                    username.isEmpty ? "\(network.label) connected" : "\(network.label) · @\(username)",
-                                    systemImage: "checkmark.circle.fill"
-                                )
-                                .foregroundStyle(.green)
-                            } else {
-                                Button(backend.linking == network ? "Connecting…" : "Connect \(network.label)") {
-                                    backend.connect(network)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(backend.linking != nil)
-                            }
-                        }
-                    }
-                } else {
-                    Button("Retry server") { Task { await backend.start() } }
-                        .buttonStyle(.bordered)
-                }
-
-                Text(backend.status)
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.72))
-
-                if !backend.overlaps.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(backend.overlaps, id: \.0) { network, overlap in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("\(network.label) · \(overlap.count ?? 0) \(network.overlapPhrase)")
-                                        .font(.headline)
-                                    if let error = overlap.error {
-                                        Text(error).font(.subheadline).foregroundStyle(.orange)
-                                    }
-                                    ForEach(overlap.common ?? []) { account in
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(account.name)
-                                            if let username = account.username {
-                                                Text("@\(username)").font(.subheadline).foregroundStyle(.white.opacity(0.65))
-                                            }
-                                        }
-                                    }
-                                    if overlap.stale == true {
-                                        Text("Showing a cached \(network.label) list")
-                                            .font(.caption)
-                                            .foregroundStyle(.white.opacity(0.65))
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 260)
-                }
-
-                if let distance = coordinator.distance, !coordinator.bumped {
-                    Text(String(format: "%.2f m apart", distance))
-                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                        .padding(.top, 12)
-                }
-
-                Spacer()
-
-                if coordinator.bumped {
-                    Button("Try again") { coordinator.reset() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.white)
-                        .foregroundStyle(.black)
-                        .controlSize(.large)
-                }
-
-                Button("Restart pairing") { coordinator.restart() }
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
-
-                Text("Demo ID \(coordinator.shortID)  ·  Keep this app open on both phones")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.55))
+            if !backend.loaded {
+                LiveBackground(style: .cream)
+                    .overlay(Wordmark(size: 30))
+            } else if backend.connected.isEmpty && !Self.skipOnboarding && !Self.autoDemo {
+                OnboardingView(
+                    networks: networks,
+                    linking: backend.linking,
+                    message: Self.isRoutine(backend.status) ? nil : backend.status,
+                    onConnect: connect
+                )
+                .transition(.opacity)
+            } else {
+                HomeView(
+                    distance: coordinator.distance,
+                    paired: coordinator.distance != nil,
+                    problem: Self.problemMarkers.contains(where: coordinator.status.contains) ? coordinator.status : nil,
+                    networks: networks,
+                    connected: backend.connected,
+                    linking: backend.linking,
+                    onConnect: connect,
+                    onRestart: { coordinator.restart() },
+                    onDemoClink: demoAction
+                )
+                .transition(.opacity)
             }
-            .foregroundStyle(.white)
-            .padding(32)
+
+            if clinking {
+                ClinkView(
+                    sections: sections,
+                    ready: demo?.ready ?? backend.comparisonReady,
+                    message: demo == nil ? backend.status : nil,
+                    onSeeAll: { showingOverlap = true },
+                    onClinkAgain: clinkAgain
+                )
+                .id(clinkID)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: backend.loaded)
+        .animation(.easeInOut(duration: 0.35), value: backend.connected.isEmpty)
+        .animation(.easeInOut(duration: 0.25), value: clinking)
+        .sheet(isPresented: $showingOverlap) {
+            OverlapView(
+                sections: sections,
+                onClinkAgain: clinkAgain
+            )
         }
         .task {
             coordinator.start()
             await backend.start()
             if let participantID = backend.participantID { coordinator.setParticipantID(participantID) }
+            if Self.autoDemo { demoAction?() }
+            if Self.autoOverlap {
+                try? await Task.sleep(nanoseconds: 4_500_000_000)
+                showingOverlap = true
+            }
+        }
+        .onChange(of: coordinator.bumped) { bumped in
+            if bumped { clinkID = UUID() }
         }
         .onChange(of: backend.participantID) { participantID in
             if let participantID { coordinator.setParticipantID(participantID) }
@@ -142,10 +122,39 @@ private struct BumpView: View {
             if let meeting = coordinator.meeting { backend.joinMeeting(meeting) }
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .active {
-                coordinator.restart()
-                Task { await backend.start() }
-            }
+            guard phase == .active else { return }
+            // Picks up a link that finished in the browser.
+            Task { await backend.start() }
+            if !clinking { coordinator.restart() }
         }
     }
+
+    private func connect(_ network: Network) {
+        if backend.participantID == nil { Task { await backend.start() } }
+        else { backend.connect(network) }
+    }
+
+    private func clinkAgain() {
+        showingOverlap = false
+        if demo != nil { demo = nil } else { coordinator.reset() }
+    }
+
+    private var demoAction: (() -> Void)? {
+        #if DEBUG
+        return {
+            clinkID = UUID()
+            demo = DemoClink()
+            // Pretend the server takes a moment to compare.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { demo?.ready = true }
+        }
+        #else
+        return nil
+        #endif
+    }
+}
+
+/// A fake clink for trying the animation without two phones.
+private struct DemoClink {
+    var sections = OverlapSection.samples
+    var ready = false
 }

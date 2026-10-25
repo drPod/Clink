@@ -335,7 +335,7 @@ final class BumpCoordinator: NSObject, ObservableObject, NISessionDelegate {
     }
 
     func sessionWasSuspended(_ session: NISession) {
-        DispatchQueue.main.async { if !self.bumped { self.status = "Keep Bump Demo open on both phones." } }
+        DispatchQueue.main.async { if !self.bumped { self.status = "Keep Clink open on both phones." } }
     }
 
     func sessionSuspensionEnded(_ session: NISession) {

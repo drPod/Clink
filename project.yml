@@ -23,11 +23,11 @@ targets:
     info:
       path: BumpDemo/Info.plist
       properties:
-        CFBundleDisplayName: Bump Demo
+        CFBundleDisplayName: Clink
         NSBonjourServices:
           - _bumpdemo._tcp
-        NSLocalNetworkUsageDescription: Find the other phone running Bump Demo.
-        NSNearbyInteractionUsageDescription: Detect when the two phones are brought together.
+        NSLocalNetworkUsageDescription: Find nearby phones running Clink.
+        NSNearbyInteractionUsageDescription: Feel the clink when your phone touches someone else’s.
         BumpAPIBaseURL: https://bump.40-160-146-47.sslip.io
         CFBundleURLTypes:
           - CFBundleURLName: dev.autumn.bumpdemo.auth

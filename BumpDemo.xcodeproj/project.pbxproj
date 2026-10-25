@@ -8,12 +8,22 @@
 
 /* Begin PBXBuildFile section */
 		038EF9EFD7D8BAFEF411781B /* BumpBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56F03F9CB17C41AD833D93CF /* BumpBackend.swift */; };
+		1D8FC33079A8AC27714EC112 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8AA6B219C70CDF5B274CDC /* Theme.swift */; };
 		4A543DB3F5D9ED12E2981BF1 /* BumpDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9BB7BAAE6E28C7FE9D7305D /* BumpDemoApp.swift */; };
+		7E6C1B36D8151EA0264AE97B /* ClinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18E764B7DE94B6B48B0D097E /* ClinkView.swift */; };
+		99A5E7455B4544857862BADF /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E56B46E0182EACE2F5A6C30 /* OnboardingView.swift */; };
 		E621D06531B54A8079291A53 /* BumpCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C6C4EC81F367760A982957 /* BumpCoordinator.swift */; };
+		E6AA99897A4F5F7A7A0EA7F9 /* OverlapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549111C1392272CF0560ECD7 /* OverlapView.swift */; };
+		EC8E716D30766E7034A2BD60 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60B51D1050E2EF3B84EB403 /* HomeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		18E764B7DE94B6B48B0D097E /* ClinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinkView.swift; sourceTree = "<group>"; };
+		2D8AA6B219C70CDF5B274CDC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		549111C1392272CF0560ECD7 /* OverlapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlapView.swift; sourceTree = "<group>"; };
 		56F03F9CB17C41AD833D93CF /* BumpBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BumpBackend.swift; sourceTree = "<group>"; };
+		9E56B46E0182EACE2F5A6C30 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A60B51D1050E2EF3B84EB403 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		B8C6C4EC81F367760A982957 /* BumpCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BumpCoordinator.swift; sourceTree = "<group>"; };
 		C9BB7BAAE6E28C7FE9D7305D /* BumpDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BumpDemoApp.swift; sourceTree = "<group>"; };
 		D9C141D8B1129685485C2072 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -27,7 +37,12 @@
 				56F03F9CB17C41AD833D93CF /* BumpBackend.swift */,
 				B8C6C4EC81F367760A982957 /* BumpCoordinator.swift */,
 				C9BB7BAAE6E28C7FE9D7305D /* BumpDemoApp.swift */,
+				18E764B7DE94B6B48B0D097E /* ClinkView.swift */,
+				A60B51D1050E2EF3B84EB403 /* HomeView.swift */,
 				D9C141D8B1129685485C2072 /* Info.plist */,
+				9E56B46E0182EACE2F5A6C30 /* OnboardingView.swift */,
+				549111C1392272CF0560ECD7 /* OverlapView.swift */,
+				2D8AA6B219C70CDF5B274CDC /* Theme.swift */,
 			);
 			path = BumpDemo;
 			sourceTree = "<group>";
@@ -110,6 +125,11 @@
 				038EF9EFD7D8BAFEF411781B /* BumpBackend.swift in Sources */,
 				E621D06531B54A8079291A53 /* BumpCoordinator.swift in Sources */,
 				4A543DB3F5D9ED12E2981BF1 /* BumpDemoApp.swift in Sources */,
+				7E6C1B36D8151EA0264AE97B /* ClinkView.swift in Sources */,
+				EC8E716D30766E7034A2BD60 /* HomeView.swift in Sources */,
+				99A5E7455B4544857862BADF /* OnboardingView.swift in Sources */,
+				E6AA99897A4F5F7A7A0EA7F9 /* OverlapView.swift in Sources */,
+				1D8FC33079A8AC27714EC112 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
