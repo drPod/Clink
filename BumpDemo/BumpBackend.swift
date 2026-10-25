@@ -97,8 +97,11 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
     }
 
     func start() async {
-        guard credentials == nil else { return }
         do {
+            if credentials != nil {
+                try await refreshMe()
+                return
+            }
             if let saved = DeviceKeychain.load() {
                 credentials = saved
                 participantID = saved.participantId
@@ -136,7 +139,8 @@ final class BumpBackend: NSObject, ObservableObject, ASWebAuthenticationPresenta
                         } else if error == nil {
                             self.status = "Instagram connection did not finish."
                         } else {
-                            self.status = "Instagram connection was canceled."
+                            do { try await self.refreshMe() }
+                            catch { self.status = "Instagram connection was canceled." }
                         }
                     }
                 }

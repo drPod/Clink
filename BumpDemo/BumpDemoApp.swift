@@ -125,7 +125,10 @@ private struct BumpView: View {
             if connected, let meeting = coordinator.meeting { backend.joinMeeting(meeting) }
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { coordinator.restart() }
+            if phase == .active {
+                coordinator.restart()
+                Task { await backend.start() }
+            }
         }
     }
 }
