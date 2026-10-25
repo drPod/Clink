@@ -1,0 +1,13 @@
+.DS_Store
+.compile
+.env
+.venv/
+buildServer.json
+DerivedData/
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+.pytest_cache/
+*.xcuserstate
+xcuserdata/

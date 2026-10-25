@@ -1,0 +1,16 @@
+[project]
+name = "bump-demo-server"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "unipile @ git+https://github.com/unipile/unipile-python.git@4515a012e18dbd867a95c2116ef75b07c16d3910",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8,<10", "ruff>=0.11,<1"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

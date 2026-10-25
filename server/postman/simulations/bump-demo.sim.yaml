@@ -1,0 +1,6 @@
+simulation: bump-demo
+routing: path
+mocks:
+  - name: unipile
+    routeKey: unipile
+    path: postman/mocks/unipile/config.yaml

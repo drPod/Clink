@@ -1,0 +1,4 @@
+http://bump.{$BASE_DOMAIN}, https://bump.{$BASE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy bump-demo:8000
+}

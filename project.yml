@@ -1,0 +1,42 @@
+name: BumpDemo
+options:
+  bundleIdPrefix: dev.autumn
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  BumpDemo:
+    build:
+      targets:
+        BumpDemo: all
+    run:
+      config: Debug
+targets:
+  BumpDemo:
+    type: application
+    platform: iOS
+    sources:
+      - path: BumpDemo
+    info:
+      path: BumpDemo/Info.plist
+      properties:
+        CFBundleDisplayName: Bump Demo
+        NSBonjourServices:
+          - _bumpdemo._tcp
+        NSLocalNetworkUsageDescription: Find the other phone running Bump Demo.
+        NSNearbyInteractionUsageDescription: Detect when the two phones are brought together.
+        BumpAPIBaseURL: https://bump.40-160-146-47.sslip.io
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.autumn.bumpdemo.auth
+            CFBundleURLSchemes:
+              - bumpdemo
+        UIRequiresFullScreen: true
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.autumn.bumpdemo
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: C2B9P7K8UG
